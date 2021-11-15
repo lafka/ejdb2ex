@@ -10,41 +10,41 @@ defmodule EJDB2 do
   """
   def info(pid, opts \\ []), do: Conn.call(pid, ["info"], opts)
 
-
   def get(pid, collection, id, opts \\ []) do
     Conn.call(pid, ["get", collection, id], opts)
   end
-
 
   @doc """
   Replace or create document identified by `id` in `collection`
   """
   def set(pid, collection, id, body, opts \\ [])
-  def set(pid, collection, id, body, opts) when is_integer(id)  do
+
+  def set(pid, collection, id, body, opts) when is_integer(id) do
     encoded = Jason.encode!(Enum.into(body, %{"id" => id}))
+
     with {:ok, recvid} <- Conn.call(pid, ["set", collection, id, encoded], opts) do
       ^recvid = id
       {:ok, Jason.decode!(encoded)}
     end
   end
 
-
   @doc """
   Add a new document to collection without specifying a primary key
   """
   def add(pid, collection, body, opts \\ []) do
     encoded = Jason.encode!(body)
+
     with {:ok, id} <- Conn.call(pid, ["add", collection, encoded], opts) do
       {:ok, Map.put(Jason.decode!(encoded), "id", id)}
     end
   end
-
 
   @doc """
   Delete document :id in :collection
   """
   def delete(pid, collection, id, opts \\ [])
   def delete(pid, collection, %{"id" => id}, opts), do: delete(pid, collection, id, opts)
+
   def delete(pid, collection, id, opts) when is_integer(id) do
     Conn.call(pid, ["del", collection, id], opts)
   end
@@ -53,17 +53,18 @@ defmodule EJDB2 do
   Patch the given document
   """
   def patch(pid, collection, old, patch, opts \\ [])
+
   def patch(pid, collection, %{"id" => id}, patch, opts) do
     patch(pid, collection, id, patch, opts)
   end
 
   def patch(pid, collection, id, patch, opts) do
     encoded = Jason.encode!(Enum.into(patch, %{"id" => id}))
+
     with {:ok, ^id} <- Conn.call(pid, ["patch", collection, id, encoded], opts) do
       get(pid, collection, id)
     end
   end
-
 
   @doc """
   Add a index of type :mode on :path in :collection
@@ -72,14 +73,12 @@ defmodule EJDB2 do
     Conn.call(pid, ["idx", collection, mode, path], opts)
   end
 
-
   @doc """
   Remove the index on :path from :colletion
   """
   def rmi(pid, collection, mode, path, opts \\ []) do
     Conn.call(pid, ["rmi", collection, mode, path], opts)
   end
-
 
   @doc """
   Remove entire collection
@@ -88,12 +87,14 @@ defmodule EJDB2 do
     Conn.call(pid, ["rmc", collection], opts)
   end
 
-
   @doc """
   Perform a query
   """
-  def query(pid, collection, query, opts \\ []) do
-    Conn.call(pid, ["queyr", collection, query], opts)
+  defmacro query(pid, collection, query, opts \\ []) do
+    quote do
+      qstr = "@#{unquote(collection)}/*"
+      outopts = Keyword.put(unquote(opts), :multi, true)
+      Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
+    end
   end
-
 end

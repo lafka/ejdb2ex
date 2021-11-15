@@ -4,9 +4,11 @@ defmodule EJDB2.Conn do
   require Logger
 
   def start_link(opts \\ [])
+
   def start_link("" <> url) do
-    start_link([uri: url])
+    start_link(uri: url)
   end
+
   def start_link(opts) do
     opts = Keyword.put_new(opts, :uri, "ws://127.0.0.1:9191")
     url = opts[:uri]
@@ -16,21 +18,22 @@ defmodule EJDB2.Conn do
   @doc """
   Send a command to the web socket process
   """
-  def call(pid, [_|_] = cmd, opts \\ []) do
-    timeout = Keyword.get(opts, :timeout, 5000)
+  def call(pid, [_ | _] = cmd, opts \\ []) do
+    {timeout, opts} = Keyword.pop(opts, :timeout, 5000)
+    multi? = true == opts[:multi]
 
     monref = Process.monitor(pid)
-    reqid = Base.encode64(:binary.encode_unsigned(0x1234 + :rand.uniform(0xffffff)))
+    reqid = Base.encode64(:binary.encode_unsigned(0x1234 + :rand.uniform(0xFFFFFF)))
 
-    :ok = WebSockex.cast(pid, {:send, {self(), reqid}, cmd})
-
+    :ok = WebSockex.cast(pid, {:send, {self(), reqid}, cmd, opts})
 
     :ok =
       receive do
         {:DOWN, ^monref, :process, ^pid, _reason} ->
           Process.exit(self(), :noproc)
-      after 0 ->
-        :ok
+      after
+        0 ->
+          :ok
       end
 
     reply =
@@ -41,60 +44,74 @@ defmodule EJDB2.Conn do
         {^reqid, :error, reason} ->
           {:error, reason}
 
-        {^reqid, :reply, reply} ->
-          json =
-            case String.split(reply, "\t", parts: 2) do
-              [n, json] ->
-                Map.put(Jason.decode!(json), "id", Jason.decode!(n))
-
-              [n] ->
-                # This is just an integer
-                Jason.decode!(n)
-            end
+        {^reqid, :reply, replies} when multi? ->
+          json = for row <- replies, into: [], do: handle_document(row)
           {:ok, json}
 
-      after timeout ->
-        Process.exit(self(), :timeout)
+        {^reqid, :reply, replies} when not multi? ->
+          [reply] = replies
+          json = handle_document(reply)
+          {:ok, json}
+      after
+        timeout ->
+          Process.exit(self(), :timeout)
       end
 
-      Process.demonitor(monref)
-      reply
+    Process.demonitor(monref)
+    reply
   end
 
+  defp handle_document(reply) do
+    case String.split(reply, "\t", parts: 2) do
+      [n, json] ->
+        Map.put(Jason.decode!(json), "id", Jason.decode!(n))
 
-  def handle_frame({:text, msg}, state) do
+      [n] ->
+        # This is just an integer
+        Jason.decode!(n)
+    end
+  end
+
+  def handle_frame({:text, input}, state) do
+    [reqid | msgs] = String.split(input, ~r/\s/, trim: true, parts: 2)
+    data? = [] != msgs
+
     state =
-      case String.split(msg, ~r/\s/, trim: true, parts: 2) do
-        [reqid, msg] ->
-          error = str_to_error(msg)
-          case state[reqid] do
-            pid when is_pid(pid) ->
-              if error do
-                Logger.warn "[#{reqid}] << #{error}"
-                send pid, {reqid, :error, error}
-              else
-                Logger.info "[#{reqid}] << #{msg}"
-                send pid, {reqid, :reply, msg}
-              end
+      case state[reqid] do
+        {pid, opts, acc} ->
+          cond do
+            data? and nil != str_to_error(hd(msgs)) ->
+              error = str_to_error(hd(msgs))
+              Logger.warn("[#{reqid}] << #{error}")
+              send(pid, {reqid, :error, error})
               Map.drop(state, [reqid])
 
-            nil ->
-              state
+            true == opts[:multi] and data? ->
+              nextstate = Map.put(state, reqid, {pid, opts, [hd(msgs) | acc]})
+              nextstate
+
+            # Final message, return the resultset
+            true == opts[:multi] and [] == msgs ->
+              send(pid, {reqid, :reply, acc})
+              Map.drop(state, [reqid])
+
+            true != opts[:multi] ->
+              Logger.info("[#{reqid}] << #{inspect(msgs)}")
+              send(pid, {reqid, :reply, msgs})
+              Map.drop(state, [reqid])
           end
 
-        _ ->
-          Logger.warn "[???] << #{msg}"
+        nil ->
           state
       end
-
 
     {:ok, state}
   end
 
-  def handle_cast({:send, {pid, reqid}, msg}, state) do
+  def handle_cast({:send, {pid, reqid}, msg, opts}, state) do
     msg = Enum.join(msg, " ")
-    Logger.info "[#{reqid}] >> #{msg}"
-    {:reply, {:text, reqid <> " " <> msg}, Map.put(state, reqid, pid)}
+    Logger.info("[#{reqid}] >> #{msg}")
+    {:reply, {:text, reqid <> " " <> msg}, Map.put(state, reqid, {pid, opts, []})}
   end
 
   defp str_to_error("ERROR: " <> _ = r) do
@@ -102,5 +119,6 @@ defmodule EJDB2.Conn do
       "IWKV_ERROR_NOTFOUND" -> :not_found
     end
   end
+
   defp str_to_error(_r), do: nil
 end
