@@ -3,10 +3,19 @@ defmodule EJDB2.Conn do
 
   require Logger
 
-  def start_link(url) do
-    WebSockex.start_link(url, __MODULE__, %{})
+  def start_link(opts \\ [])
+  def start_link("" <> url) do
+    start_link([uri: url])
+  end
+  def start_link(opts) do
+    opts = Keyword.put_new(opts, :uri, "ws://127.0.0.1:9191")
+    url = opts[:uri]
+    WebSockex.start_link(url, __MODULE__, Enum.into(opts, %{}))
   end
 
+  @doc """
+  Send a command to the web socket process
+  """
   def call(pid, [_|_] = cmd, opts \\ []) do
     timeout = Keyword.get(opts, :timeout, 5000)
 
@@ -54,7 +63,6 @@ defmodule EJDB2.Conn do
 
 
   def handle_frame({:text, msg}, state) do
-
     state =
       case String.split(msg, ~r/\s/, trim: true, parts: 2) do
         [reqid, msg] ->

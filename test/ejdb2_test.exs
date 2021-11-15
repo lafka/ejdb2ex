@@ -8,41 +8,20 @@
   @coll "collection"
 
   setup %{test: name} do
-
-    bin = String.trim "#{:os.cmd('command -v jbs')}"
-    bindport = 55000 + :rand.uniform(10000)
-    file = "/tmp/ejdb-#{:erlang.phash2(name)}-#{:erlang.phash2(make_ref())}"
-    args = ["--file", file, "--bind", @host, "--port", "#{bindport}"]
-    command = "#{bin} #{Enum.join(args, " ")}"
-
-    Logger.error ("#{inspect self()} #{command}")
-
-
-    {:ok, _, runner} = :exec.run(command, [:stdout, :stderr])
-    receive do
-      {:stderr, ^runner, line} ->
-        true = String.match?(line, ~r/HTTP\/WS endpoint at #{@host}:#{bindport}\n$/)
-      after 1000 ->
-        Logger.error "Failed to start EJDB2 subprocess in time"
-        exit(:timeout)
-    end
-
-    on_exit(fn ->
-      :ok = :exec.stop(runner)
-      receive do
-        {:DOWN, _, :process, _, _} -> :ok
-      after 100 ->
-        :exec.kill(runner, :sigterm)
-      end
-      File.rm!(file)
-    end)
+    {:ok, bindport} = connect(name)
 
     Logger.warn "CONNECT ws://#{@host}:#{bindport}/"
     {:ok, pid} = EJDB2.Conn.start_link("ws://#{@host}:#{bindport}/")
 
     {:ok, %{
-      conn: pid
+      conn: pid,
+      port: bindport,
     }}
+  end
+
+  test "authentication token", opts do
+    # Not implemented
+    nil
   end
 
 
@@ -83,5 +62,42 @@
     assert {:ok, Map.put(a, "additional", "data")} == EJDB2.patch(pid, @coll, id, %{additional: "data"})
 
     assert {:ok, Map.put(a, "additional", "next")} == EJDB2.patch(pid, @coll, id, additional: "next")
+  end
+
+
+
+  defp connect(name, additional \\ []) do
+    bin = String.trim "#{:os.cmd('command -v jbs')}"
+    bindport = 55000 + :rand.uniform(10000)
+    file = "/tmp/ejdb-#{:erlang.phash2(name)}-#{:erlang.phash2(make_ref())}"
+    args = [file: file, bind: @host, port: bindport] ++ additional
+    args = for {k, v} <- args, reduce: [] do
+      acc -> ["--#{k}", v | acc]
+    end
+    command = "#{bin} #{Enum.join(args, " ")}"
+
+    Logger.error ("#{inspect self()} #{command}")
+
+
+    {:ok, _, runner} = :exec.run(command, [:stdout, :stderr])
+    receive do
+      {:stderr, ^runner, line} ->
+        true = String.match?(line, ~r/HTTP\/WS endpoint at #{@host}:#{bindport}\n$/)
+      after 1000 ->
+        Logger.error "Failed to start EJDB2 subprocess in time"
+        exit(:timeout)
+    end
+
+    on_exit(fn ->
+      :ok = :exec.stop(runner)
+      receive do
+        {:DOWN, _, :process, _, _} -> :ok
+      after 100 ->
+        :exec.kill(runner, :sigterm)
+      end
+      File.rm!(file)
+    end)
+
+    {:ok, bindport}
   end
 end
