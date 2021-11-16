@@ -90,11 +90,63 @@ defmodule EJDB2 do
   @doc """
   Perform a query
   """
-  defmacro query(pid, collection, query, opts \\ []) do
-    quote do
-      qstr = "@#{unquote(collection)}/*"
-      outopts = Keyword.put(unquote(opts), :multi, true)
-      Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
+  defmacro query(pid, collection, query \\ true, opts \\ []) do
+    with {:ok, q2} <- transform(query) do
+      qstr = case Macro.to_string(q2, &strfn/2) do
+        "true" -> "*"
+        qstr -> "[#{qstr}]"
+      end
+      quote do
+        qstr = "@#{unquote(collection)}/#{unquote(qstr)}"
+        outopts = Keyword.put(unquote(opts), :multi, true)
+        Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
+      end
     end
   end
+
+  # defp strfn({:!, _env, [{:in, _env2, [a, b]}]}, _oldstr) do
+  #   "#{Macro.to_string(a, &strfn/2)} ni #{Macro.to_string(b, &strfn/2)}"
+  # end
+  defp strfn({:!, _env, [{:in, _env2, [a, b]}]}, _oldstr) do
+    "#{Macro.to_string(a, &strfn/2)} in #{Macro.to_string(b, &strfn/2)}"
+  end
+  defp strfn({:like, _env, [source, match]}, _oldstr) do
+    regex =
+      match
+        |> String.replace("_", ".")
+        |> String.replace("%", ".*?")
+
+    "#{source} re \"^#{regex}$\""
+  end
+  defp strfn(token, string) do
+    string
+  end
+
+  # defp validate({:and, _, [a, b]}), do: validate(a) and validate(b)
+  @operators [:and, :or, :>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
+  # defp transform({:not, env, [{:in, _env2, [a, b]}]}), do: transform({:ni, env, [a, b]})
+  defp transform({op, env, [a, b]}) when op in @operators do
+    with {:ok, a} <- transform(a),
+         {:ok, b} <- transform(b) do
+      {:ok, translate({op, env, [a, b]})}
+    end
+  end
+  # like is not an infix operator
+  defp transform({a, aenv, [{:like, _env, [b]}]}), do: transform({:like, aenv, [a, b]})
+  # normalize all negation to use !
+  defp transform({op, env, [a]}) when op in [:not, :!], do: {:ok, {:!, env, [a]}}
+  # we don't support nesting as of now
+  defp transform({{:., _, _}, _, _}), do: {:error, :nesting}
+  defp transform({:., _, _}), do: {:error, :nesting}
+  # Keep variables
+  defp transform({var, env, nil}), do: {:ok, {var, env, nil}}
+  # Keep distinct values
+  defp transform(n) when is_integer(n) or is_float(n), do: {:ok, n}
+  defp transform(s) when is_binary(s), do: {:ok, s}
+  defp transform(a) when is_atom(a), do: {:ok, a}
+  defp transform(l) when is_list(l), do: {:ok, l}
+
+
+  defp translate({:==, env, args}), do: {:=, env, args}
+  defp translate({op, env, args}), do: {op, env, args}
 end

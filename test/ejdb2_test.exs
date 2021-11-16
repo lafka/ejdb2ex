@@ -21,7 +21,7 @@ defmodule EJDB2Test do
      }}
   end
 
-  test "authentication token", opts do
+  test "authentication token", _opts do
     # Not implemented
     nil
   end
@@ -45,7 +45,7 @@ defmodule EJDB2Test do
   end
 
   test "delete document", %{conn: pid} do
-    assert {:ok, a = %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
+    assert {:ok, _a = %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
     assert {:ok, b = %{"id" => 2, "value" => "b"}} == EJDB2.add(pid, @coll, %{value: :b})
 
     # Delete document by id
@@ -54,8 +54,8 @@ defmodule EJDB2Test do
 
     # Delete document
     assert {:ok, 2} == EJDB2.delete(pid, @coll, b)
-    {:error, :not_found} == EJDB2.delete(pid, @coll, b)
-    {:error, :not_found} == EJDB2.delete(pid, @coll, 2)
+    assert {:error, :not_found} == EJDB2.delete(pid, @coll, b)
+    assert {:error, :not_found} == EJDB2.delete(pid, @coll, 2)
   end
 
   test "patch document", %{conn: pid} do
@@ -69,22 +69,82 @@ defmodule EJDB2Test do
   end
 
   test "query", %{conn: pid} do
-    objects =
-      for r <- ?a..?f, into: %{} do
-        {:ok, %{"id" => id} = obj} = EJDB2.add(pid, @coll, %{value: r})
-        {id, obj}
-      end
+    objects = objects pid, 6
 
-    assert {:ok, rows} = EJDB2.query(pid, @coll, id != 32)
+    assert {:ok, rows} = EJDB2.query(pid, @coll)
 
     assert rows == [
-             %{"id" => 1, "value" => 97},
-             %{"id" => 2, "value" => 98},
-             %{"id" => 3, "value" => 99},
-             %{"id" => 4, "value" => 100},
-             %{"id" => 5, "value" => 101},
-             %{"id" => 6, "value" => 102}
+             %{"id" => 1, "value" => 1},
+             %{"id" => 2, "value" => 2},
+             %{"id" => 3, "value" => 3},
+             %{"id" => 4, "value" => 4},
+             %{"id" => 5, "value" => 5},
+             %{"id" => 6, "value" => 6},
+             %{"id" => 7, "value" => 7}
            ]
+    assert rows == objects
+  end
+
+  test "query: basic operators", %{conn: pid} do
+    all = objects pid, 5
+
+    # equal to
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value == 4)
+    assert rows == [%{"id" => 4, "value" => 4}]
+
+    # not equal to
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value != 4)
+    assert rows == (all -- [%{"id" => 4, "value" => 4}])
+
+    # greater than
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value > 4)
+    assert rows == [%{"id" => 5, "value" => 5}, %{"id" => 6, "value" => 6}]
+
+    # greater than or equals to
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value >= 5)
+    assert rows == [%{"id" => 5, "value" => 5}, %{"id" => 6, "value" => 6}]
+
+    # less than
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value < 3)
+    assert rows == [%{"id" => 1, "value" => 1}, %{"id" => 2, "value" => 2}]
+
+    # less than or equals to
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value <= 2)
+    assert rows == [%{"id" => 1, "value" => 1}, %{"id" => 2, "value" => 2}]
+
+    # value in set
+    assert {:ok, rows} = EJDB2.query(pid, @coll, value in [2, 3])
+    assert rows == [%{"id" => 2, "value" => 2}, %{"id" => 3, "value" => 3}]
+
+
+    # # value not in set - not working currently
+    # assert {:ok, rows} = EJDB2.query(pid, @coll, value not in [4])
+    # assert rows == [%{"id" => 2, "value" => 2}, %{"id" => 3, "value" => 3}]
+  end
+
+
+  test "query: regex", %{conn: pid} do
+    {:ok, a} = EJDB2.add(pid, @coll, %{value: "some sample"})
+    {:ok, b} = EJDB2.add(pid, @coll, %{value: "other sample"})
+    {:ok, c} = EJDB2.add(pid, @coll, %{value: "sample later"})
+    {:ok, d} = EJDB2.add(pid, @coll, %{value: "unsampled"})
+    {:ok, e} = EJDB2.add(pid, @coll, %{value: "other"})
+
+    assert {:ok, [c]} == EJDB2.query(pid, @coll, value like "sample%")
+    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value like "%sample%")
+    assert {:ok, []} == EJDB2.query(pid, @coll, value like "%not included%")
+    # There's no support for start and end of line matches so we can't make
+    # an exact copy of (NOT) LIKE
+    # assert {:ok, [e]} == EJDB2.query(pid, @coll, value like "other")
+    # assert {:ok, [a, b]} == EJDB2.query(pid, @coll, value like "%sample")
+  end
+
+
+  defp objects(pid, n) when n > 0 do
+    for r <- 1..(1+n) do
+      {:ok, obj} = EJDB2.add(pid, @coll, %{value: r})
+      obj
+    end
   end
 
   defp connect(name, additional \\ []) do
