@@ -21,7 +21,8 @@ defmodule EJDB2.MixProject do
     [
       {:websockex, "~> 0.4.3"},
       {:jason, "~> 1.2"},
-      {:erlexec, "~> 1.0", only: :test}
+      {:erlexec, "~> 1.0", only: :test},
+      {:credo, "~> 1.6", only: [:dev, :test], runtime: false}
     ]
   end
 end

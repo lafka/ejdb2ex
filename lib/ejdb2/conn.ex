@@ -1,4 +1,8 @@
 defmodule EJDB2.Conn do
+  @moduledoc """
+  Keep a websocket connection with EJDB2 instance
+  """
+
   use WebSockex
 
   require Logger

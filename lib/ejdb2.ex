@@ -92,10 +92,12 @@ defmodule EJDB2 do
   """
   defmacro query(pid, collection, query \\ true, opts \\ []) do
     with {:ok, q2} <- transform(query) do
-      qstr = case Macro.to_string(q2, &strfn/2) do
-        "true" -> "*"
-        qstr -> "[#{qstr}]"
-      end
+      qstr =
+        case Macro.to_string(q2, &strfn/2) do
+          "true" -> "*"
+          qstr -> "[#{qstr}]"
+        end
+
       quote do
         qstr = "@#{unquote(collection)}/#{unquote(qstr)}"
         outopts = Keyword.put(unquote(opts), :multi, true)
@@ -110,15 +112,17 @@ defmodule EJDB2 do
   defp strfn({:!, _env, [{:in, _env2, [a, b]}]}, _oldstr) do
     "#{Macro.to_string(a, &strfn/2)} in #{Macro.to_string(b, &strfn/2)}"
   end
+
   defp strfn({:like, _env, [source, match]}, _oldstr) do
     regex =
       match
-        |> String.replace("_", ".")
-        |> String.replace("%", ".*?")
+      |> String.replace("_", ".")
+      |> String.replace("%", ".*?")
 
     "#{source} re \"^#{regex}$\""
   end
-  defp strfn(token, string) do
+
+  defp strfn(_token, string) do
     string
   end
 
@@ -131,6 +135,7 @@ defmodule EJDB2 do
       {:ok, translate({op, env, [a, b]})}
     end
   end
+
   # like is not an infix operator
   defp transform({a, aenv, [{:like, _env, [b]}]}), do: transform({:like, aenv, [a, b]})
   # normalize all negation to use !
@@ -145,7 +150,6 @@ defmodule EJDB2 do
   defp transform(s) when is_binary(s), do: {:ok, s}
   defp transform(a) when is_atom(a), do: {:ok, a}
   defp transform(l) when is_list(l), do: {:ok, l}
-
 
   defp translate({:==, env, args}), do: {:=, env, args}
   defp translate({op, env, args}), do: {op, env, args}

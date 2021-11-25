@@ -69,7 +69,7 @@ defmodule EJDB2Test do
   end
 
   test "query", %{conn: pid} do
-    objects = objects pid, 6
+    objects = objects(pid, 6)
 
     assert {:ok, rows} = EJDB2.query(pid, @coll)
 
@@ -82,11 +82,12 @@ defmodule EJDB2Test do
              %{"id" => 6, "value" => 6},
              %{"id" => 7, "value" => 7}
            ]
+
     assert rows == objects
   end
 
   test "query: basic operators", %{conn: pid} do
-    all = objects pid, 5
+    all = objects(pid, 5)
 
     # equal to
     assert {:ok, rows} = EJDB2.query(pid, @coll, value == 4)
@@ -94,7 +95,7 @@ defmodule EJDB2Test do
 
     # not equal to
     assert {:ok, rows} = EJDB2.query(pid, @coll, value != 4)
-    assert rows == (all -- [%{"id" => 4, "value" => 4}])
+    assert rows == all -- [%{"id" => 4, "value" => 4}]
 
     # greater than
     assert {:ok, rows} = EJDB2.query(pid, @coll, value > 4)
@@ -116,40 +117,38 @@ defmodule EJDB2Test do
     assert {:ok, rows} = EJDB2.query(pid, @coll, value in [2, 3])
     assert rows == [%{"id" => 2, "value" => 2}, %{"id" => 3, "value" => 3}]
 
-
     # # value not in set - not working currently
     # assert {:ok, rows} = EJDB2.query(pid, @coll, value not in [4])
     # assert rows == [%{"id" => 2, "value" => 2}, %{"id" => 3, "value" => 3}]
   end
-
 
   test "query: regex", %{conn: pid} do
     {:ok, a} = EJDB2.add(pid, @coll, %{value: "some sample"})
     {:ok, b} = EJDB2.add(pid, @coll, %{value: "other sample"})
     {:ok, c} = EJDB2.add(pid, @coll, %{value: "sample later"})
     {:ok, d} = EJDB2.add(pid, @coll, %{value: "unsampled"})
-    {:ok, e} = EJDB2.add(pid, @coll, %{value: "other"})
+    {:ok, _e} = EJDB2.add(pid, @coll, %{value: "other"})
 
-    assert {:ok, [c]} == EJDB2.query(pid, @coll, value like "sample%")
-    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value like "%sample%")
-    assert {:ok, []} == EJDB2.query(pid, @coll, value like "%not included%")
+    assert {:ok, [c]} == EJDB2.query(pid, @coll, value(like("sample%")))
+    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value(like("%sample%")))
+    assert {:ok, []} == EJDB2.query(pid, @coll, value(like("%not included%")))
     # There's no support for start and end of line matches so we can't make
     # an exact copy of (NOT) LIKE
     # assert {:ok, [e]} == EJDB2.query(pid, @coll, value like "other")
     # assert {:ok, [a, b]} == EJDB2.query(pid, @coll, value like "%sample")
   end
 
-
   defp objects(pid, n) when n > 0 do
-    for r <- 1..(1+n) do
+    for r <- 1..(1 + n) do
       {:ok, obj} = EJDB2.add(pid, @coll, %{value: r})
       obj
     end
   end
 
   defp connect(name, additional \\ []) do
-    bin = String.trim("#{:os.cmd('command -v jbs')}")
-    bindport = 55000 + :rand.uniform(10000)
+    {bin, 0} = System.cmd("which", ["jbs"])
+    bin = String.trim(bin)
+    bindport = 55_000 + :rand.uniform(10_000)
     file = "/tmp/ejdb-#{:erlang.phash2(name)}-#{:erlang.phash2(make_ref())}"
     args = [file: file, bind: @host, port: bindport] ++ additional
 
@@ -160,18 +159,26 @@ defmodule EJDB2Test do
 
     command = "#{bin} #{Enum.join(args, " ")}"
 
-    Logger.error("#{inspect(self())} #{command}")
+    Logger.debug("#{inspect(self())} exec - #{command}")
 
     {:ok, _, runner} = :exec.run(command, [:stdout, :stderr])
 
-    receive do
-      {:stderr, ^runner, line} ->
-        true = String.match?(line, ~r/HTTP\/WS endpoint at #{@host}:#{bindport}\n$/)
-    after
-      1000 ->
-        Logger.error("Failed to start EJDB2 subprocess in time")
-        exit(:timeout)
+    await_startup = fn fun ->
+      receive do
+        {:stderr, ^runner, line} ->
+          if String.match?(line, ~r/HTTP\/WS endpoint at #{@host}:#{bindport}\n$/) do
+            :ok
+          else
+            fun.(fun)
+          end
+      after
+        1000 ->
+          Logger.error("Failed to start EJDB2 subprocess in time")
+          exit(:timeout)
+      end
     end
+
+    :ok = await_startup.(await_startup)
 
     on_exit(fn ->
       :ok = :exec.stop(runner)
