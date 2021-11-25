@@ -14,9 +14,17 @@ defmodule EJDB2.Conn do
   end
 
   def start_link(opts) do
+    # If available use :name option such that it can be used with a Registry
+    {genopts, opts} =
+      case Keyword.pop(opts, :name) do
+        {nil, opts} -> {[], opts}
+        {name, opts} -> {[name: name], opts}
+      end
+
     opts = Keyword.put_new(opts, :uri, "ws://127.0.0.1:9191")
     url = opts[:uri]
-    WebSockex.start_link(url, __MODULE__, Enum.into(opts, %{}))
+
+    WebSockex.start_link(url, __MODULE__, Enum.into(opts, %{}), genopts)
   end
 
   @doc """
