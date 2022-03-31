@@ -133,6 +133,7 @@ defmodule EJDB2.Conn do
   defp str_to_error("ERROR: " <> _ = r) do
     case String.trim(String.trim(List.last(String.split(r)), ")"), "(") do
       "IWKV_ERROR_NOTFOUND" -> :not_found
+      _ -> :input
     end
   end
 

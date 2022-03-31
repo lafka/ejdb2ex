@@ -129,14 +129,23 @@ defmodule EJDB2Test do
     {:ok, d} = EJDB2.add(pid, @coll, %{value: "unsampled"})
     {:ok, _e} = EJDB2.add(pid, @coll, %{value: "other"})
 
-    assert {:ok, [c]} == EJDB2.query(pid, @coll, value(like("sample%")))
-    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value(like("%sample%")))
-    assert {:ok, []} == EJDB2.query(pid, @coll, value(like("%not included%")))
+    assert {:ok, [c]} == EJDB2.query(pid, @coll, value like "sample%")
+    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value like "%sample%")
+    assert {:ok, []} == EJDB2.query(pid, @coll, value like "%not included%")
     # There's no support for start and end of line matches so we can't make
     # an exact copy of (NOT) LIKE
     # assert {:ok, [e]} == EJDB2.query(pid, @coll, value like "other")
     # assert {:ok, [a, b]} == EJDB2.query(pid, @coll, value like "%sample")
   end
+
+  test "query: bind value", %{conn: pid} do
+    {:ok, a} = EJDB2.add(pid, @coll, %{value: "some sample"})
+    {:ok, %{"value" => val} = b} = EJDB2.add(pid, @coll, %{value: "unsampled"})
+
+    assert {:ok, [a]} == EJDB2.query(pid, @coll, value != ^val)
+    assert {:ok, [b]} == EJDB2.query(pid, @coll, value == ^val)
+  end
+
 
   test "info", %{conn: pid} do
     assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})

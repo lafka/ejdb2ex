@@ -90,67 +90,65 @@ defmodule EJDB2 do
   @doc """
   Perform a query
   """
-  defmacro query(pid, collection, query \\ true, opts \\ []) do
-    with {:ok, q2} <- transform(query) do
-      qstr =
-        case Macro.to_string(q2, &strfn/2) do
-          "true" -> "*"
-          qstr -> "[#{qstr}]"
-        end
+  defmacro query(pid, collection, q \\ true, opts \\ []) do
+    # prewalk, convert all compile time values to query string
+    try do
+      parts = compact(q)
 
       quote do
-        qstr = "@#{unquote(collection)}/#{unquote(qstr)}"
+        parts = Enum.map(unquote(parts), fn {term} -> inspect(term); s -> s end)
+        qstr = 
+          case Enum.join(parts, " ") do
+            "true" -> "*"
+            qstr -> "[#{qstr}]"
+          end
+
+        qstr = "@#{unquote(collection)}/#{qstr}"
         outopts = Keyword.put(unquote(opts), :multi, true)
         Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
       end
+    rescue e in ArgumentError ->
+      {:error, e.message}
     end
   end
 
-  # defp strfn({:!, _env, [{:in, _env2, [a, b]}]}, _oldstr) do
-  #   "#{Macro.to_string(a, &strfn/2)} ni #{Macro.to_string(b, &strfn/2)}"
-  # end
-  defp strfn({:!, _env, [{:in, _env2, [a, b]}]}, _oldstr) do
-    "#{Macro.to_string(a, &strfn/2)} in #{Macro.to_string(b, &strfn/2)}"
-  end
+  @operators [:and, :or, :>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
 
-  defp strfn({:like, _env, [source, match]}, _oldstr) do
+  def strfn({:^, env, [e]}), do: {:^, env, [e]}
+  def strfn(a), do: a
+
+  # Quote ^bound variables in a tuple so we can easily detect them later
+  def compact(term) when is_atom(term), do:    [Macro.to_string(term)]
+  def compact(term) when is_float(term), do:   [Macro.to_string(term)]
+  def compact(term) when is_integer(term), do: [Macro.to_string(term)]
+  def compact(term) when is_binary(term), do:  [Macro.to_string(term)]
+  def compact(term) when is_list(term) do
+    compacted = for t <- term, do: compact(t)
+    [
+      "[",
+      Enum.join(compacted, ", "),
+      "]"
+    ]
+  end
+  def compact({var, env, [{:like, env, [match]}]}) do
     regex =
       match
       |> String.replace("_", ".")
       |> String.replace("%", ".*?")
-
-    "#{source} re \"^#{regex}$\""
+    [Macro.to_string({var, [], nil}), "re", inspect(regex)]
   end
 
-  defp strfn(_token, string) do
-    string
-  end
+  # Mark this for later
+  def compact({:^, env, [e]}), do: {:{}, env, [e]}
+  # Normal variables refers to a property in the model
+  def compact({_var, _env, nil} = e), do: Macro.to_string(e)
+  # Compact infix operators 
+  def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: [compact(a), "#{map_op(op)}", compact(b)]
+  # Left hand side must be a property!!!
+  def compact({op, _env, [a, _b]}), do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
+  # Rest can be used as-is
+  def compact(a), do: a
 
-  # defp validate({:and, _, [a, b]}), do: validate(a) and validate(b)
-  @operators [:and, :or, :>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
-  # defp transform({:not, env, [{:in, _env2, [a, b]}]}), do: transform({:ni, env, [a, b]})
-  defp transform({op, env, [a, b]}) when op in @operators do
-    with {:ok, a} <- transform(a),
-         {:ok, b} <- transform(b) do
-      {:ok, translate({op, env, [a, b]})}
-    end
-  end
-
-  # like is not an infix operator
-  defp transform({a, aenv, [{:like, _env, [b]}]}), do: transform({:like, aenv, [a, b]})
-  # normalize all negation to use !
-  defp transform({op, env, [a]}) when op in [:not, :!], do: {:ok, {:!, env, [a]}}
-  # we don't support nesting as of now
-  defp transform({{:., _, _}, _, _}), do: {:error, :nesting}
-  defp transform({:., _, _}), do: {:error, :nesting}
-  # Keep variables
-  defp transform({var, env, nil}), do: {:ok, {var, env, nil}}
-  # Keep distinct values
-  defp transform(n) when is_integer(n) or is_float(n), do: {:ok, n}
-  defp transform(s) when is_binary(s), do: {:ok, s}
-  defp transform(a) when is_atom(a), do: {:ok, a}
-  defp transform(l) when is_list(l), do: {:ok, l}
-
-  defp translate({:==, env, args}), do: {:=, env, args}
-  defp translate({op, env, args}), do: {op, env, args}
+  defp map_op(:==), do: "="
+  defp map_op(op) when op in @operators, do: "#{op}"
 end
