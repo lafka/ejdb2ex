@@ -138,6 +138,25 @@ defmodule EJDB2Test do
     # assert {:ok, [a, b]} == EJDB2.query(pid, @coll, value like "%sample")
   end
 
+  test "info", %{conn: pid} do
+    assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
+    {:ok, a} = EJDB2.info(pid)
+
+    assert %{
+      "collections" => [
+        %{"dbid" => 3, "indexes" => [], "name" => "collection", "rnum" => 1}
+      ],
+      "file" => _,
+      "size" => _,
+      "version" => _,
+    } = a
+  end
+
+  test "add index", %{conn: pid} do
+    {:ok, %{"collections" => []}} = EJDB2.info(pid)
+    assert :ok == EJDB2.idx(pid, @coll, 5, "/id")
+  end
+
   defp objects(pid, n) when n > 0 do
     for r <- 1..(1 + n) do
       {:ok, obj} = EJDB2.add(pid, @coll, %{value: r})

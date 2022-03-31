@@ -60,6 +60,10 @@ defmodule EJDB2.Conn do
           json = for row <- replies, into: [], do: handle_document(row)
           {:ok, json}
 
+        # Some commands (like idx) does not give any response
+        {^reqid, :reply, []} when not multi? ->
+          :ok
+
         {^reqid, :reply, replies} when not multi? ->
           [reply] = replies
           json = handle_document(reply)
