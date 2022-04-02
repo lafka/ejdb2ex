@@ -32,7 +32,7 @@ defmodule EJDB2Test do
     assert {:ok, new = %{"id" => 1, "replace" => "all"}} ==
              EJDB2.set(pid, @coll, 1, %{replace: "all"})
 
-    assert {:ok, {id, ^new}} = EJDB2.get(pid, @coll, 1)
+    assert {:ok, {_id, ^new}} = EJDB2.get(pid, @coll, 1)
   end
 
   test "add", %{conn: pid} do
@@ -71,7 +71,7 @@ defmodule EJDB2Test do
   test "query", %{conn: pid} do
     objects = objects(pid, 6)
 
-    assert {:ok, rows} = EJDB2.query(pid, @coll)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll))
 
     assert rows == [
              %{"id" => 1, "value" => 1},
@@ -90,31 +90,31 @@ defmodule EJDB2Test do
     all = objects(pid, 5)
 
     # equal to
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value == 4)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == 4))
     assert rows == [%{"id" => 4, "value" => 4}]
 
     # not equal to
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value != 4)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value != 4))
     assert rows == all -- [%{"id" => 4, "value" => 4}]
 
     # greater than
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value > 4)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value > 4))
     assert rows == [%{"id" => 5, "value" => 5}, %{"id" => 6, "value" => 6}]
 
     # greater than or equals to
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value >= 5)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value >= 5))
     assert rows == [%{"id" => 5, "value" => 5}, %{"id" => 6, "value" => 6}]
 
     # less than
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value < 3)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value < 3))
     assert rows == [%{"id" => 1, "value" => 1}, %{"id" => 2, "value" => 2}]
 
     # less than or equals to
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value <= 2)
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value <= 2))
     assert rows == [%{"id" => 1, "value" => 1}, %{"id" => 2, "value" => 2}]
 
     # value in set
-    assert {:ok, rows} = EJDB2.query(pid, @coll, value in [2, 3])
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value in [2, 3]))
     assert rows == [%{"id" => 2, "value" => 2}, %{"id" => 3, "value" => 3}]
 
     # # value not in set - not working currently
@@ -129,9 +129,9 @@ defmodule EJDB2Test do
     {:ok, d} = EJDB2.add(pid, @coll, %{"value" => "unsampled"})
     {:ok, _e} = EJDB2.add(pid, @coll, %{"value" => "other"})
 
-    assert {:ok, [c]} == EJDB2.query(pid, @coll, value like "sample%")
-    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value like "%sample%")
-    assert {:ok, []} == EJDB2.query(pid, @coll, value like "%not included%")
+    assert {:ok, [c]} == EJDB2.query(pid, EJDB2.from(@coll, value like "sample%"))
+    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, value like "%sample%"))
+    assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, value like "%not included%"))
     # There's no support for start and end of line matches so we can't make
     # an exact copy of (NOT) LIKE
     # assert {:ok, [e]} == EJDB2.query(pid, @coll, value like "other")
@@ -142,8 +142,8 @@ defmodule EJDB2Test do
     {:ok, a} = EJDB2.add(pid, @coll, %{"value" => "some sample"})
     {:ok, %{"value" => val} = b} = EJDB2.add(pid, @coll, %{"value" => "unsampled"})
 
-    assert {:ok, [a]} == EJDB2.query(pid, @coll, value != ^val)
-    assert {:ok, [b]} == EJDB2.query(pid, @coll, value == ^val)
+    assert {:ok, [a]} == EJDB2.query(pid, EJDB2.from(@coll, value != ^val))
+    assert {:ok, [b]} == EJDB2.query(pid, EJDB2.from(@coll, value == ^val))
   end
 
 

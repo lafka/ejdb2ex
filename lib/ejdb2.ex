@@ -109,12 +109,26 @@ defmodule EJDB2 do
     Conn.call(pid, ["rmc", collection], opts)
   end
 
+
   @doc """
   Perform a query
   """
-  defmacro query(pid, collection, q \\ true, opts \\ []) do
+  def query(pid, {collection, qstr}, opts \\ []) do
     idfield = opts[:id] || "id"
     # prewalk, convert all compile time values to query string
+    outopts = Keyword.put(opts, :multi, true)
+    res = Conn.call(pid, ["query", collection, qstr], outopts)
+    with {:ok, rows} <- res do
+      rows = for {id, data} <- rows, do: Map.put(data, idfield, id)
+      {:ok, rows}
+    end
+  end
+
+
+  @doc """
+  Build a query string
+  """
+  defmacro from(collection, q \\ true) do
     try do
       parts = compact(q)
 
@@ -126,18 +140,13 @@ defmodule EJDB2 do
             qstr -> "[#{qstr}]"
           end
 
-        qstr = "@#{unquote(collection)}/#{qstr}"
-        outopts = Keyword.put(unquote(opts), :multi, true)
-        res = Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
-        with {:ok, rows} <- res do
-          rows = for {id, data} <- rows, do: Map.put(data, unquote(idfield), id)
-          {:ok, rows}
-        end
+        {unquote(collection), "@#{unquote(collection)}/#{qstr}"}
       end
     rescue e in ArgumentError ->
       {:error, e.message}
     end
   end
+
 
   @operators [:and, :or, :>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
 
