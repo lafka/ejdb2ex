@@ -32,21 +32,21 @@ defmodule EJDB2Test do
     assert {:ok, new = %{"id" => 1, "replace" => "all"}} ==
              EJDB2.set(pid, @coll, 1, %{replace: "all"})
 
-    assert {:ok, ^new} = EJDB2.get(pid, @coll, 1)
+    assert {:ok, {id, ^new}} = EJDB2.get(pid, @coll, 1)
   end
 
   test "add", %{conn: pid} do
-    assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
-    assert {:ok, %{"id" => 2, "value" => "b"}} == EJDB2.add(pid, @coll, %{value: :b})
-    assert {:ok, %{"id" => 3, "value" => "c"}} == EJDB2.add(pid, @coll, %{value: :c})
-    assert {:ok, %{"id" => 4, "value" => "d"}} == EJDB2.add(pid, @coll, %{value: :d})
-    assert {:ok, %{"id" => 5, "value" => "e"}} == EJDB2.add(pid, @coll, %{value: :e})
-    assert {:ok, %{"id" => 6, "value" => "f"}} == EJDB2.add(pid, @coll, %{value: :f})
+    assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
+    assert {:ok, %{"id" => 2, "value" => "b"}} == EJDB2.add(pid, @coll, %{"value" => "b"})
+    assert {:ok, %{"id" => 3, "value" => "c"}} == EJDB2.add(pid, @coll, %{"value" => "c"})
+    assert {:ok, %{"id" => 4, "value" => "d"}} == EJDB2.add(pid, @coll, %{"value" => "d"})
+    assert {:ok, %{"id" => 5, "value" => "e"}} == EJDB2.add(pid, @coll, %{"value" => "e"})
+    assert {:ok, %{"id" => 6, "value" => "f"}} == EJDB2.add(pid, @coll, %{"value" => "f"})
   end
 
   test "delete document", %{conn: pid} do
-    assert {:ok, _a = %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
-    assert {:ok, b = %{"id" => 2, "value" => "b"}} == EJDB2.add(pid, @coll, %{value: :b})
+    assert {:ok, _a = %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
+    assert {:ok, b = %{"id" => 2, "value" => "b"}} == EJDB2.add(pid, @coll, %{"value" => "b"})
 
     # Delete document by id
     assert {:ok, 1} == EJDB2.delete(pid, @coll, 1)
@@ -59,13 +59,13 @@ defmodule EJDB2Test do
   end
 
   test "patch document", %{conn: pid} do
-    assert {:ok, a = %{"id" => id = 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
+    assert {:ok, a = %{"id" => id = 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
 
-    assert {:ok, Map.put(a, "additional", "data")} ==
-             EJDB2.patch(pid, @coll, id, %{additional: "data"})
+    assert {:ok, {id, Map.put(a, "additional", "data")}} ==
+             EJDB2.patch(pid, @coll, id, %{"additional" => "data"})
 
-    assert {:ok, Map.put(a, "additional", "next")} ==
-             EJDB2.patch(pid, @coll, id, additional: "next")
+    assert {:ok, {id, Map.put(a, "additional", "next")}} ==
+             EJDB2.patch(pid, @coll, id, %{"additional" => "next"})
   end
 
   test "query", %{conn: pid} do
@@ -123,11 +123,11 @@ defmodule EJDB2Test do
   end
 
   test "query: regex", %{conn: pid} do
-    {:ok, a} = EJDB2.add(pid, @coll, %{value: "some sample"})
-    {:ok, b} = EJDB2.add(pid, @coll, %{value: "other sample"})
-    {:ok, c} = EJDB2.add(pid, @coll, %{value: "sample later"})
-    {:ok, d} = EJDB2.add(pid, @coll, %{value: "unsampled"})
-    {:ok, _e} = EJDB2.add(pid, @coll, %{value: "other"})
+    {:ok, a} = EJDB2.add(pid, @coll, %{"value" => "some sample"})
+    {:ok, b} = EJDB2.add(pid, @coll, %{"value" => "other sample"})
+    {:ok, c} = EJDB2.add(pid, @coll, %{"value" => "sample later"})
+    {:ok, d} = EJDB2.add(pid, @coll, %{"value" => "unsampled"})
+    {:ok, _e} = EJDB2.add(pid, @coll, %{"value" => "other"})
 
     assert {:ok, [c]} == EJDB2.query(pid, @coll, value like "sample%")
     assert {:ok, [a, b, c, d]} == EJDB2.query(pid, @coll, value like "%sample%")
@@ -139,8 +139,8 @@ defmodule EJDB2Test do
   end
 
   test "query: bind value", %{conn: pid} do
-    {:ok, a} = EJDB2.add(pid, @coll, %{value: "some sample"})
-    {:ok, %{"value" => val} = b} = EJDB2.add(pid, @coll, %{value: "unsampled"})
+    {:ok, a} = EJDB2.add(pid, @coll, %{"value" => "some sample"})
+    {:ok, %{"value" => val} = b} = EJDB2.add(pid, @coll, %{"value" => "unsampled"})
 
     assert {:ok, [a]} == EJDB2.query(pid, @coll, value != ^val)
     assert {:ok, [b]} == EJDB2.query(pid, @coll, value == ^val)
@@ -148,7 +148,7 @@ defmodule EJDB2Test do
 
 
   test "info", %{conn: pid} do
-    assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{value: :a})
+    assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
     {:ok, a} = EJDB2.info(pid)
 
     assert %{
@@ -168,7 +168,7 @@ defmodule EJDB2Test do
 
   defp objects(pid, n) when n > 0 do
     for r <- 1..(1 + n) do
-      {:ok, obj} = EJDB2.add(pid, @coll, %{value: r})
+      {:ok, obj} = EJDB2.add(pid, @coll, %{"value" => r})
       obj
     end
   end

@@ -8,10 +8,16 @@ defmodule EJDB2 do
   @doc """
   Retrieve information about the database
   """
-  def info(pid, opts \\ []), do: Conn.call(pid, ["info"], opts)
+  def info(pid, opts \\ []) do
+    with {:ok, {res, nil}} <- Conn.call(pid, ["info"], opts), do: {:ok, res}
+  end
 
   def get(pid, collection, id, opts \\ []) do
-    Conn.call(pid, ["get", collection, id], opts)
+    idfield = opts[:id] || "id"
+    with {^id, data} <- Conn.call(pid, ["get", collection, id], opts) do
+      body = Map.put(data, idfield, id)
+      {:ok, Jason.encode!(body)}
+    end
   end
 
   @doc """
@@ -20,10 +26,11 @@ defmodule EJDB2 do
   def set(pid, collection, id, body, opts \\ [])
 
   def set(pid, collection, id, body, opts) when is_integer(id) do
-    encoded = Jason.encode!(Enum.into(body, %{"id" => id}))
+    idfield = opts[:id] || "id"
+    body = Map.put(body, idfield, id)
+    encoded = Jason.encode!(body)
 
-    with {:ok, recvid} <- Conn.call(pid, ["set", collection, id, encoded], opts) do
-      ^recvid = id
+    with {:ok, {^id, nil}} <- Conn.call(pid, ["set", collection, id, encoded], opts) do
       {:ok, Jason.decode!(encoded)}
     end
   end
@@ -32,10 +39,13 @@ defmodule EJDB2 do
   Add a new document to collection without specifying a primary key
   """
   def add(pid, collection, body, opts \\ []) do
+    idfield = opts[:id] || "id"
     encoded = Jason.encode!(body)
 
-    with {:ok, id} <- Conn.call(pid, ["add", collection, encoded], opts) do
-      {:ok, Map.put(Jason.decode!(encoded), "id", id)}
+    with {:ok, {id, nil}} <- Conn.call(pid, ["add", collection, encoded], opts) do
+      body = Map.put(body, idfield, id)
+
+      {:ok, body}
     end
   end
 
@@ -43,10 +53,17 @@ defmodule EJDB2 do
   Delete document :id in :collection
   """
   def delete(pid, collection, id, opts \\ [])
-  def delete(pid, collection, %{"id" => id}, opts), do: delete(pid, collection, id, opts)
+  def delete(pid, collection, %{} = fields, opts) do
+    idfield = opts[:id] || "id"
+    {:ok, id} = Map.fetch(fields, idfield)
+    delete(pid, collection, id, opts)
+  end
 
   def delete(pid, collection, id, opts) when is_integer(id) do
-    Conn.call(pid, ["del", collection, id], opts)
+    with {:ok, res} <- Conn.call(pid, ["del", collection, id], opts) do
+      {^id, nil} = res
+      {:ok, id}
+    end
   end
 
   @doc """
@@ -54,14 +71,19 @@ defmodule EJDB2 do
   """
   def patch(pid, collection, old, patch, opts \\ [])
 
-  def patch(pid, collection, %{"id" => id}, patch, opts) do
+  def patch(pid, collection, %{} = fields, patch, opts) do
+    idfield = opts[:id] || "id"
+    {:ok, id} = Map.fetch(fields, idfield)
     patch(pid, collection, id, patch, opts)
   end
 
   def patch(pid, collection, id, patch, opts) do
-    encoded = Jason.encode!(Enum.into(patch, %{"id" => id}))
+    idfield = opts[:id] || "id"
 
-    with {:ok, ^id} <- Conn.call(pid, ["patch", collection, id, encoded], opts) do
+    patch = Map.put(patch, idfield, id)
+    encoded = Jason.encode!(patch)
+
+    with {:ok, {^id, nil}} <- Conn.call(pid, ["patch", collection, id, encoded], opts) do
       get(pid, collection, id)
     end
   end
@@ -91,13 +113,14 @@ defmodule EJDB2 do
   Perform a query
   """
   defmacro query(pid, collection, q \\ true, opts \\ []) do
+    idfield = opts[:id] || "id"
     # prewalk, convert all compile time values to query string
     try do
       parts = compact(q)
 
       quote do
         parts = Enum.map(unquote(parts), fn {term} -> inspect(term); s -> s end)
-        qstr = 
+        qstr =
           case Enum.join(parts, " ") do
             "true" -> "*"
             qstr -> "[#{qstr}]"
@@ -105,7 +128,11 @@ defmodule EJDB2 do
 
         qstr = "@#{unquote(collection)}/#{qstr}"
         outopts = Keyword.put(unquote(opts), :multi, true)
-        Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
+        res = Conn.call(unquote(pid), ["query", unquote(collection), qstr], outopts)
+        with {:ok, rows} <- res do
+          rows = for {id, data} <- rows, do: Map.put(data, unquote(idfield), id)
+          {:ok, rows}
+        end
       end
     rescue e in ArgumentError ->
       {:error, e.message}
@@ -142,7 +169,7 @@ defmodule EJDB2 do
   def compact({:^, env, [e]}), do: {:{}, env, [e]}
   # Normal variables refers to a property in the model
   def compact({_var, _env, nil} = e), do: Macro.to_string(e)
-  # Compact infix operators 
+  # Compact infix operators
   def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: [compact(a), "#{map_op(op)}", compact(b)]
   # Left hand side must be a property!!!
   def compact({op, _env, [a, _b]}), do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"

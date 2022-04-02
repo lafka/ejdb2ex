@@ -64,8 +64,7 @@ defmodule EJDB2.Conn do
         {^reqid, :reply, []} when not multi? ->
           :ok
 
-        {^reqid, :reply, replies} when not multi? ->
-          [reply] = replies
+        {^reqid, :reply, [reply]} when not multi? ->
           json = handle_document(reply)
           {:ok, json}
       after
@@ -80,11 +79,11 @@ defmodule EJDB2.Conn do
   defp handle_document(reply) do
     case String.split(reply, "\t", parts: 2) do
       [n, json] ->
-        Map.put(Jason.decode!(json), "id", Jason.decode!(n))
+        {Jason.decode!(n), Jason.decode!(json)}
 
       [n] ->
-        # This is just an integer
-        Jason.decode!(n)
+        # Always the primary key as an integer
+        {Jason.decode!(n), nil}
     end
   end
 
