@@ -111,7 +111,7 @@ defmodule EJDB2.Conn do
               Map.drop(state, [reqid])
 
             true != opts[:multi] ->
-              Logger.info("[#{reqid}] << #{inspect(msgs)}")
+              Logger.debug("[#{reqid}] << #{inspect(msgs)}")
               send(pid, {reqid, :reply, msgs})
               Map.drop(state, [reqid])
           end
@@ -125,7 +125,7 @@ defmodule EJDB2.Conn do
 
   def handle_cast({:send, {pid, reqid}, msg, opts}, state) do
     msg = Enum.join(msg, " ")
-    Logger.info("[#{reqid}] >> #{msg}")
+    Logger.debug("[#{reqid}] >> #{msg}")
     {:reply, {:text, reqid <> " " <> msg}, Map.put(state, reqid, {pid, opts, []})}
   end
 
