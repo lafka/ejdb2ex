@@ -184,7 +184,7 @@ defmodule EJDB2 do
   def compact({_var, _env, nil} = e), do: Macro.to_string(e)
   # Compact infix operators
   def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: [compact(a), "#{map_op(op)}", compact(b)]
-  def compact({op, env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
+  def compact({op, _env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
   # Left hand side must be a property!!!
   def compact({op, _env, [a, _b]}) when op not in @logical_ops, do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
   # Rest can be used as-is
