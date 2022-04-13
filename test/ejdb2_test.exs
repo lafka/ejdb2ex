@@ -123,7 +123,7 @@ defmodule EJDB2Test do
   end
 
   test "query: and operator", %{conn: pid} do
-    all = objects(pid, 5)
+    objects(pid, 5)
 
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value > 3 and value < 5))
     assert rows == [%{"id" => 4, "value" => 4}]
@@ -134,7 +134,7 @@ defmodule EJDB2Test do
   end
 
   test "query: or operator", %{conn: pid} do
-    all = objects(pid, 5)
+    objects(pid, 5)
 
     {a, b} = {3, 5}
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == 3 or value == 5))
@@ -142,6 +142,14 @@ defmodule EJDB2Test do
 
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == ^a or value == ^b))
     assert rows == [%{"id" => 3, "value" => 3}, %{"id" => 5, "value" => 5}]
+  end
+
+  test "query: dot expansion for bound variable", %{conn: pid} do
+    objects(pid, 5)
+
+    data = %{a: 1}
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == ^data.a))
+    assert rows == [%{"id" => 1, "value" => 1}]
   end
 
   test "query: regex", %{conn: pid} do
