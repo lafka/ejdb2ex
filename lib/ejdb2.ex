@@ -148,7 +148,8 @@ defmodule EJDB2 do
   end
 
 
-  @operators [:and, :or, :>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
+  @operators [:>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
+  @logical_ops [:and, :or]
 
   def strfn({:^, env, [e]}), do: {:^, env, [e]}
   def strfn(a), do: a
@@ -180,11 +181,12 @@ defmodule EJDB2 do
   def compact({_var, _env, nil} = e), do: Macro.to_string(e)
   # Compact infix operators
   def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: [compact(a), "#{map_op(op)}", compact(b)]
+  def compact({op, env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
   # Left hand side must be a property!!!
-  def compact({op, _env, [a, _b]}), do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
+  def compact({op, _env, [a, _b]}) when op not in @logical_ops, do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
   # Rest can be used as-is
-  def compact(a), do: a
+  def compact(a), do: IO.inspect a, label: "LAST CHANCE"
 
   defp map_op(:==), do: "="
-  defp map_op(op) when op in @operators, do: "#{op}"
+  defp map_op(op), do: "#{op}"
 end

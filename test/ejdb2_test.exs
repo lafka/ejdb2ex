@@ -122,6 +122,20 @@ defmodule EJDB2Test do
     # assert rows == [%{"id" => 2, "value" => 2}, %{"id" => 3, "value" => 3}]
   end
 
+  test "query: and operator", %{conn: pid} do
+    all = objects(pid, 5)
+
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value > 3 and value < 5))
+    assert rows == [%{"id" => 4, "value" => 4}]
+  end
+
+  test "query: or operator", %{conn: pid} do
+    all = objects(pid, 5)
+
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == 3 or value == 5))
+    assert rows == [%{"id" => 3, "value" => 3}, %{"id" => 5, "value" => 5}]
+  end
+
   test "query: regex", %{conn: pid} do
     {:ok, a} = EJDB2.add(pid, @coll, %{"value" => "some sample"})
     {:ok, b} = EJDB2.add(pid, @coll, %{"value" => "other sample"})
