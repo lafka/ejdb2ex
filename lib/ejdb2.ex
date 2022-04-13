@@ -133,9 +133,12 @@ defmodule EJDB2 do
       parts = compact(q)
 
       quote do
-        parts = Enum.map(unquote(parts), fn {term} -> inspect(term); s -> s end)
+        strparts = unquote(parts)
+            |> List.flatten()
+            |> Enum.map(fn {term} -> inspect(term); s -> s end)
+
         qstr =
-          case Enum.join(parts, " ") do
+          case Enum.join(strparts, " ") do
             "true" -> "*"
             qstr -> "[#{qstr}]"
           end
@@ -185,7 +188,7 @@ defmodule EJDB2 do
   # Left hand side must be a property!!!
   def compact({op, _env, [a, _b]}) when op not in @logical_ops, do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
   # Rest can be used as-is
-  def compact(a), do: IO.inspect a, label: "LAST CHANCE"
+  def compact(a), do: a
 
   defp map_op(:==), do: "="
   defp map_op(op), do: "#{op}"

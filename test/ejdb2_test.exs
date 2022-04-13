@@ -127,12 +127,20 @@ defmodule EJDB2Test do
 
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value > 3 and value < 5))
     assert rows == [%{"id" => 4, "value" => 4}]
+
+    {a, b} = {3, 5}
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value > ^a and value < ^b))
+    assert rows == [%{"id" => 4, "value" => 4}]
   end
 
   test "query: or operator", %{conn: pid} do
     all = objects(pid, 5)
 
+    {a, b} = {3, 5}
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == 3 or value == 5))
+    assert rows == [%{"id" => 3, "value" => 3}, %{"id" => 5, "value" => 5}]
+
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, value == ^a or value == ^b))
     assert rows == [%{"id" => 3, "value" => 3}, %{"id" => 5, "value" => 5}]
   end
 
@@ -199,7 +207,7 @@ defmodule EJDB2Test do
         acc -> ["--#{k}", v | acc]
       end
 
-    command = "#{bin} #{Enum.join(args, " ")}"
+    command = "#{bin} #{Enum.join(["--trylock", "--trunc"  | args], " ")}"
 
     Logger.debug("#{inspect(self())} exec - #{command}")
 
