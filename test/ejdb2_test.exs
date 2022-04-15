@@ -189,6 +189,18 @@ defmodule EJDB2Test do
 
   end
 
+  test "query: wildcard path", %{conn: pid} do
+    selected = Enum.filter(objects(pid, 5, true), fn(%{"value" => v}) -> v == 3 end)
+
+    data = 3
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, _.value == ^data))
+    assert rows == selected
+
+    data = %{a: 3}
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, deep.__.value == ^data.a))
+    assert rows == selected
+  end
+
 
   test "info", %{conn: pid} do
     assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})

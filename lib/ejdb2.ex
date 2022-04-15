@@ -186,11 +186,11 @@ defmodule EJDB2 do
   def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: ["/[", compact(a), "#{map_op(op)}", compact(b), "]"]
   def compact({op, _env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
   # Left hand side must be a property or a dotted path!
-  def compact({op, _env, [{ {:., _, path}, _, [] }, b]}) do
-    {path, [key]} = Enum.split(path, length(path) - 1)
+  def compact({op, _env, [{ {:., _, _} = dottedpath, _, [] }, b]}) do
+    {path, key} = to_path(dottedpath)
 
     [
-      "#{to_path(path)}/[",
+      "#{path}/[",
       "#{key}", "#{map_op(op)}", compact(b),
       "]"
     ]
@@ -200,11 +200,29 @@ defmodule EJDB2 do
   # Rest can be used as-is
   def compact(a), do: a
 
-  def to_path(path) do
-      [""|path]
-      |> Enum.map(fn {e, _, _} -> "#{e}"; e -> "#{e}" end)
+  # defp to_path({:., _env, [path , field]}) do
+  #   {to_path(path, [""]), field}
+  # end
+  # defp to_path({:., _env, [{:_, _, _}, next]}, acc), do: to_path(next, acc ++ ["*"])
+  # defp to_path({:., _env, [{:__, _, _}, next]}, acc), do: to_path(next, acc ++ ["**"])
+  # defp to_path({:., _env, [{e, _, _}, next]}, acc), do: to_path(next, acc ++ [e])
+  # defp to_path({a, _, nil}, acc) when is_atom(a), do: acc ++ [a]
+  # defp to_path(a, acc) when is_atom(a), do: acc ++ [a]
+
+
+  defp to_path(path) do
+    [field | rest] = to_path(path, [""])
+
+    newpath = rest
+      |> Enum.reverse()
+      |> Enum.map(fn :_ -> "*"; :__ -> "**"; e -> e end)
       |> Enum.join("/")
+
+    {newpath, field}
   end
+  defp to_path({:., _env, [path , field]}, acc), do: [field | to_path(path, acc)]
+  defp to_path({ {:., _env, [path , field]}, _, []}, acc), do: [field | to_path(path, acc)]
+  defp to_path({a, _env, ni}, acc) when is_atom(a), do: [a | acc]
 
   defp map_op(:==), do: "="
   defp map_op(op), do: "#{op}"
