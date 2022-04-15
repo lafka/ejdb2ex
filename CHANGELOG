@@ -1,0 +1,24 @@
+## v0.3.0 - 15h April 2022
+
+ * Add support for nested path in EJDB2 query
+ * Support wildcards using _ and __
+
+## v0.2.2 - 13th April 2022
+
+ * Fix bug when binding variables which used dotted path
+
+## v0.2.1 - 13th April 2022
+
+ * Separate query builder and execution
+ * Support for and/or
+
+## v0.2.0 - 2nd April 2022
+
+ * Return EJDB2 primary key in tuple instead of embedding in document
+ * Add support for binding variables in query like `field == ^value_in_elixir`
+ * Fix broken index command
+
+
+## v0.1.1 - 25th November 2021
+
+Minimal working code for integrating EDJB2 over WebSockets.
