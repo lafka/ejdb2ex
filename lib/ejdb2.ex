@@ -139,11 +139,11 @@ defmodule EJDB2 do
 
         qstr =
           case Enum.join(strparts, " ") do
-            "true" -> "*"
-            qstr -> "[#{qstr}]"
+            "true" -> "/*"
+            qstr -> "#{qstr}"
           end
 
-        {unquote(collection), "@#{unquote(collection)}/#{qstr}"}
+        {unquote(collection), "@#{unquote(collection)}#{qstr}"}
       end
     rescue e in ArgumentError ->
       {:error, e.message}
@@ -182,13 +182,29 @@ defmodule EJDB2 do
   def compact({:^, env, [e]}), do: {:{}, env, [e]}
   # Normal variables refers to a property in the model
   def compact({_var, _env, nil} = e), do: Macro.to_string(e)
-  # Compact infix operators
-  def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: [compact(a), "#{map_op(op)}", compact(b)]
+  # Compact infix operators and make it one single query element
+  def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: ["/[", compact(a), "#{map_op(op)}", compact(b), "]"]
   def compact({op, _env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
-  # Left hand side must be a property!!!
-  def compact({op, _env, [a, _b]}) when op not in @logical_ops, do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
+  # Left hand side must be a property or a dotted path!
+  def compact({op, _env, [{ {:., _, path}, _, [] }, b]}) do
+    {path, [key]} = Enum.split(path, length(path) - 1)
+
+    [
+      "#{to_path(path)}/[",
+      "#{key}", "#{map_op(op)}", compact(b),
+      "]"
+    ]
+
+  end
+  def compact({op, _env, [a, _b]}) when op not in @logical_ops, do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(IO.inspect a)}"
   # Rest can be used as-is
   def compact(a), do: a
+
+  def to_path(path) do
+      [""|path]
+      |> Enum.map(fn {e, _, _} -> "#{e}"; e -> "#{e}" end)
+      |> Enum.join("/")
+  end
 
   defp map_op(:==), do: "="
   defp map_op(op), do: "#{op}"

@@ -176,6 +176,19 @@ defmodule EJDB2Test do
     assert {:ok, [b]} == EJDB2.query(pid, EJDB2.from(@coll, value == ^val))
   end
 
+  test "query: path selection", %{conn: pid} do
+    selected = Enum.filter(objects(pid, 5, true), fn(%{"value" => v}) -> v == 3 end)
+
+    data = 3
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, nested.value == ^data))
+    assert rows == selected
+
+    data = %{a: 3}
+    assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, nested.value == ^data.a))
+    assert rows == selected
+
+  end
+
 
   test "info", %{conn: pid} do
     assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
@@ -196,9 +209,15 @@ defmodule EJDB2Test do
     assert :ok == EJDB2.idx(pid, @coll, 5, "/id")
   end
 
-  defp objects(pid, n) when n > 0 do
+  defp objects(pid, n, nested \\ false) when n > 0 do
     for r <- 1..(1 + n) do
-      {:ok, obj} = EJDB2.add(pid, @coll, %{"value" => r})
+      value = if nested do
+        %{"value" => r, "nested" => %{"value" => r}, "deep" => %{"deep" => %{"value" => r}}}
+      else
+        %{"value" => r}
+
+      end
+      {:ok, obj} = EJDB2.add(pid, @coll, value)
       obj
     end
   end
