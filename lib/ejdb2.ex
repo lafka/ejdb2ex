@@ -54,6 +54,7 @@ defmodule EJDB2 do
   Delete document :id in :collection
   """
   def delete(pid, collection, id, opts \\ [])
+
   def delete(pid, collection, %{} = fields, opts) do
     idfield = opts[:id] || "id"
     {:ok, id} = Map.fetch(fields, idfield)
@@ -246,7 +247,7 @@ defmodule EJDB2 do
 
   defp to_path({:., _env, [path, field]}, acc), do: [field | to_path(path, acc)]
   defp to_path({{:., _env, [path, field]}, _, []}, acc), do: [field | to_path(path, acc)]
-  defp to_path({a, _env, ni}, acc) when is_atom(a), do: [a | acc]
+  defp to_path({a, _env, nil}, acc) when is_atom(a), do: [a | acc]
 
   defp map_op(:==), do: "="
   defp map_op(op), do: "#{op}"
