@@ -183,7 +183,7 @@ defmodule EJDB2 do
   # Normal variables refers to a property in the model
   def compact({_var, _env, nil} = e), do: Macro.to_string(e)
   # Compact infix operators and make it one single query element
-  def compact({op, env, [{_var, env, nil} = a, b]}) when op in @operators, do: ["/[", compact(a), "#{map_op(op)}", compact(b), "]"]
+  def compact({op, _env1, [{_var, _env2, nil} = a, b]}) when op in @operators, do: ["/[", compact(a), "#{map_op(op)}", compact(b), "]"]
   def compact({op, _env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
   # Left hand side must be a property or a dotted path!
   def compact({op, _env, [{ {:., _, _} = dottedpath, _, [] }, b]}) do
