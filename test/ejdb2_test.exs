@@ -9,15 +9,11 @@ defmodule EJDB2Test do
   @coll "collection"
 
   setup %{test: name} do
-    {:ok, bindport} = connect(name)
-
-    Logger.warn("CONNECT ws://#{@host}:#{bindport}/")
-    {:ok, pid} = EJDB2.Conn.start_link("ws://#{@host}:#{bindport}/")
+    {:ok, pid} = connect(name)
 
     {:ok,
      %{
-       conn: pid,
-       port: bindport
+       conn: pid
      }}
   end
 
@@ -246,28 +242,30 @@ defmodule EJDB2Test do
         acc -> ["--#{k}", v | acc]
       end
 
-    command = "#{bin} #{Enum.join(["--trylock", "--trunc"  | args], " ")}"
+    command = "#{bin} #{Enum.join(["--trylock", "--trunc" | args], " ")}"
 
     Logger.debug("#{inspect(self())} exec - #{command}")
 
     {:ok, _, runner} = :exec.run(command, [:stdout, :stderr])
 
-    await_startup = fn fun ->
-      receive do
-        {:stderr, ^runner, line} ->
-          if String.match?(line, ~r/HTTP\/WS endpoint at #{@host}:#{bindport}\n$/) do
-            :ok
-          else
-            fun.(fun)
-          end
-      after
-        1000 ->
-          Logger.error("Failed to start EJDB2 subprocess in time")
+    await_startup = fn fun, acc ->
+      case EJDB2.Conn.start_link("ws://#{@host}:#{bindport}/") do
+        {:ok, pid} ->
+          {:ok, pid}
+
+        _ when acc < 10 ->
+          Process.sleep(100)
+          fun.(fun, acc + 1)
+
+        _ ->
+          Logger.error("Failed to start EJDB2 subprocess in 10 attempts")
           exit(:timeout)
       end
     end
 
-    :ok = await_startup.(await_startup)
+    Logger.warn("TRYING TO CONNECT ws://#{@host}:#{bindport}/")
+
+    {:ok, pid} = await_startup.(await_startup, 1)
 
     on_exit(fn ->
       :ok = :exec.stop(runner)
@@ -282,6 +280,6 @@ defmodule EJDB2Test do
       File.rm!(file)
     end)
 
-    {:ok, bindport}
+    {:ok, pid}
   end
 end
