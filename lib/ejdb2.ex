@@ -14,6 +14,7 @@ defmodule EJDB2 do
 
   def get(pid, collection, id, opts \\ []) do
     idfield = opts[:id] || "id"
+
     with {^id, data} <- Conn.call(pid, ["get", collection, id], opts) do
       body = Map.put(data, idfield, id)
       {:ok, Jason.encode!(body)}
@@ -109,7 +110,6 @@ defmodule EJDB2 do
     Conn.call(pid, ["rmc", collection], opts)
   end
 
-
   @doc """
   Perform a query
   """
@@ -118,12 +118,12 @@ defmodule EJDB2 do
     # prewalk, convert all compile time values to query string
     outopts = Keyword.put(opts, :multi, true)
     res = Conn.call(pid, ["query", collection, qstr], outopts)
+
     with {:ok, rows} <- res do
       rows = for {id, data} <- rows, do: Map.put(data, idfield, id)
       {:ok, rows}
     end
   end
-
 
   @doc """
   Build a query string
@@ -133,9 +133,13 @@ defmodule EJDB2 do
       parts = compact(q)
 
       quote do
-        strparts = unquote(parts)
-            |> List.flatten()
-            |> Enum.map(fn {term} -> inspect(term); s -> s end)
+        strparts =
+          unquote(parts)
+          |> List.flatten()
+          |> Enum.map(fn
+            {term} -> inspect(term)
+            s -> s
+          end)
 
         qstr =
           case Enum.join(strparts, " ") do
@@ -145,11 +149,11 @@ defmodule EJDB2 do
 
         {unquote(collection), "@#{unquote(collection)}#{qstr}"}
       end
-    rescue e in ArgumentError ->
-      {:error, e.message}
+    rescue
+      e in ArgumentError ->
+        {:error, e.message}
     end
   end
-
 
   @operators [:>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
   @logical_ops [:and, :or]
@@ -158,23 +162,27 @@ defmodule EJDB2 do
   def strfn(a), do: a
 
   # Quote ^bound variables in a tuple so we can easily detect them later
-  def compact(term) when is_atom(term), do:    [Macro.to_string(term)]
-  def compact(term) when is_float(term), do:   [Macro.to_string(term)]
+  def compact(term) when is_atom(term), do: [Macro.to_string(term)]
+  def compact(term) when is_float(term), do: [Macro.to_string(term)]
   def compact(term) when is_integer(term), do: [Macro.to_string(term)]
-  def compact(term) when is_binary(term), do:  [Macro.to_string(term)]
+  def compact(term) when is_binary(term), do: [Macro.to_string(term)]
+
   def compact(term) when is_list(term) do
     compacted = for t <- term, do: compact(t)
+
     [
       "[",
       Enum.join(compacted, ", "),
       "]"
     ]
   end
+
   def compact({var, env, [{:like, env, [match]}]}) do
     regex =
       match
       |> String.replace("_", ".")
       |> String.replace("%", ".*?")
+
     [Macro.to_string({var, [], nil}), "re", inspect(regex)]
   end
 
@@ -183,20 +191,31 @@ defmodule EJDB2 do
   # Normal variables refers to a property in the model
   def compact({_var, _env, nil} = e), do: Macro.to_string(e)
   # Compact infix operators and make it one single query element
-  def compact({op, _env1, [{_var, _env2, nil} = a, b]}) when op in @operators, do: ["/[", compact(a), "#{map_op(op)}", compact(b), "]"]
-  def compact({op, _env, [a, b]}) when op in @logical_ops, do: [compact(a), "#{map_op(op)}", compact(b)]
+  def compact({op, _env1, [{_var, _env2, nil} = a, b]}) when op in @operators,
+    do: ["/[", compact(a), "#{map_op(op)}", compact(b), "]"]
+
+  def compact({op, _env, [a, b]}) when op in @logical_ops,
+    do: [compact(a), "#{map_op(op)}", compact(b)]
+
   # Left hand side must be a property or a dotted path!
-  def compact({op, _env, [{ {:., _, _} = dottedpath, _, [] }, b]}) do
+  def compact({op, _env, [{{:., _, _} = dottedpath, _, []}, b]}) do
     {path, key} = to_path(dottedpath)
 
     [
       "#{path}/[",
-      "#{key}", "#{map_op(op)}", compact(b),
+      "#{key}",
+      "#{map_op(op)}",
+      compact(b),
       "]"
     ]
-
   end
-  def compact({op, _env, [a, _b]}) when op not in @logical_ops, do: raise ArgumentError, message: "Left hand side of #{op} must be property; got #{Macro.to_string(IO.inspect a)}"
+
+  def compact({op, _env, [a, _b]}) when op not in @logical_ops,
+    do:
+      raise(ArgumentError,
+        message: "Left hand side of #{op} must be property; got #{Macro.to_string(IO.inspect(a))}"
+      )
+
   # Rest can be used as-is
   def compact(a), do: a
 
@@ -209,19 +228,24 @@ defmodule EJDB2 do
   # defp to_path({a, _, nil}, acc) when is_atom(a), do: acc ++ [a]
   # defp to_path(a, acc) when is_atom(a), do: acc ++ [a]
 
-
   defp to_path(path) do
     [field | rest] = to_path(path, [""])
 
-    newpath = rest
+    newpath =
+      rest
       |> Enum.reverse()
-      |> Enum.map(fn :_ -> "*"; :__ -> "**"; e -> e end)
+      |> Enum.map(fn
+        :_ -> "*"
+        :__ -> "**"
+        e -> e
+      end)
       |> Enum.join("/")
 
     {newpath, field}
   end
-  defp to_path({:., _env, [path , field]}, acc), do: [field | to_path(path, acc)]
-  defp to_path({ {:., _env, [path , field]}, _, []}, acc), do: [field | to_path(path, acc)]
+
+  defp to_path({:., _env, [path, field]}, acc), do: [field | to_path(path, acc)]
+  defp to_path({{:., _env, [path, field]}, _, []}, acc), do: [field | to_path(path, acc)]
   defp to_path({a, _env, ni}, acc) when is_atom(a), do: [a | acc]
 
   defp map_op(:==), do: "="

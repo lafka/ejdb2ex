@@ -40,7 +40,7 @@ defmodule EJDB2Test do
     assert {:ok, %{"id" => 6, "value" => "f"}} == EJDB2.add(pid, @coll, %{"value" => "f"})
   end
 
-  test "delete document", %{conn: pid} do
+  test "delete document by id", %{conn: pid} do
     assert {:ok, _a = %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
     assert {:ok, b = %{"id" => 2, "value" => "b"}} == EJDB2.add(pid, @coll, %{"value" => "b"})
 
@@ -55,7 +55,8 @@ defmodule EJDB2Test do
   end
 
   test "patch document", %{conn: pid} do
-    assert {:ok, a = %{"id" => id = 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
+    assert {:ok, a = %{"id" => id = 1, "value" => "a"}} ==
+             EJDB2.add(pid, @coll, %{"value" => "a"})
 
     assert {:ok, {id, Map.put(a, "additional", "data")}} ==
              EJDB2.patch(pid, @coll, id, %{"additional" => "data"})
@@ -155,9 +156,9 @@ defmodule EJDB2Test do
     {:ok, d} = EJDB2.add(pid, @coll, %{"value" => "unsampled"})
     {:ok, _e} = EJDB2.add(pid, @coll, %{"value" => "other"})
 
-    assert {:ok, [c]} == EJDB2.query(pid, EJDB2.from(@coll, value like "sample%"))
-    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, value like "%sample%"))
-    assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, value like "%not included%"))
+    assert {:ok, [c]} == EJDB2.query(pid, EJDB2.from(@coll, value(like("sample%"))))
+    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, value(like("%sample%"))))
+    assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, value(like("%not included%"))))
     # There's no support for start and end of line matches so we can't make
     # an exact copy of (NOT) LIKE
     # assert {:ok, [e]} == EJDB2.query(pid, @coll, value like "other")
@@ -173,7 +174,7 @@ defmodule EJDB2Test do
   end
 
   test "query: path selection", %{conn: pid} do
-    selected = Enum.filter(objects(pid, 5, true), fn(%{"value" => v}) -> v == 3 end)
+    selected = Enum.filter(objects(pid, 5, true), fn %{"value" => v} -> v == 3 end)
 
     data = 3
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, nested.value == ^data))
@@ -182,11 +183,10 @@ defmodule EJDB2Test do
     data = %{a: 3}
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, nested.value == ^data.a))
     assert rows == selected
-
   end
 
   test "query: wildcard path", %{conn: pid} do
-    selected = Enum.filter(objects(pid, 5, true), fn(%{"value" => v}) -> v == 3 end)
+    selected = Enum.filter(objects(pid, 5, true), fn %{"value" => v} -> v == 3 end)
 
     data = 3
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, _.value == ^data))
@@ -197,19 +197,18 @@ defmodule EJDB2Test do
     assert rows == selected
   end
 
-
   test "info", %{conn: pid} do
     assert {:ok, %{"id" => 1, "value" => "a"}} == EJDB2.add(pid, @coll, %{"value" => "a"})
     {:ok, a} = EJDB2.info(pid)
 
     assert %{
-      "collections" => [
-        %{"dbid" => 3, "indexes" => [], "name" => "collection", "rnum" => 1}
-      ],
-      "file" => _,
-      "size" => _,
-      "version" => _,
-    } = a
+             "collections" => [
+               %{"dbid" => 3, "indexes" => [], "name" => "collection", "rnum" => 1}
+             ],
+             "file" => _,
+             "size" => _,
+             "version" => _
+           } = a
   end
 
   test "add index", %{conn: pid} do
@@ -219,12 +218,13 @@ defmodule EJDB2Test do
 
   defp objects(pid, n, nested \\ false) when n > 0 do
     for r <- 1..(1 + n) do
-      value = if nested do
-        %{"value" => r, "nested" => %{"value" => r}, "deep" => %{"deep" => %{"value" => r}}}
-      else
-        %{"value" => r}
+      value =
+        if nested do
+          %{"value" => r, "nested" => %{"value" => r}, "deep" => %{"deep" => %{"value" => r}}}
+        else
+          %{"value" => r}
+        end
 
-      end
       {:ok, obj} = EJDB2.add(pid, @coll, value)
       obj
     end
