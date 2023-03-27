@@ -159,6 +159,12 @@ defmodule EJDB2Test do
     assert {:ok, [c]} == EJDB2.query(pid, EJDB2.from(@coll, value(like("sample%"))))
     assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, value(like("%sample%"))))
     assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, value(like("%not included%"))))
+
+
+    assert {:ok, [c]} == EJDB2.query(pid, EJDB2.from(@coll, re(value, "^sample")))
+    assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, re(value, ".*sample.*")))
+    assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, re(value, "%not included%")))
+
     # There's no support for start and end of line matches so we can't make
     # an exact copy of (NOT) LIKE
     # assert {:ok, [e]} == EJDB2.query(pid, @coll, value like "other")

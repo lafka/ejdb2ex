@@ -156,7 +156,7 @@ defmodule EJDB2 do
     end
   end
 
-  @operators [:>, :<, :>=, :<=, :!=, :==, :in, :ni, :like]
+  @operators [:>, :<, :>=, :<=, :!=, :==, :in, :ni, :like, :re]
   @logical_ops [:and, :or]
 
   def strfn({:^, env, [e]}), do: {:^, env, [e]}
@@ -178,13 +178,13 @@ defmodule EJDB2 do
     ]
   end
 
-  def compact({var, env, [{:like, env, [match]}]}) do
+  def compact({var, env1, [{:like, _env2, [match]}]}) do
     regex =
       match
       |> String.replace("_", ".")
       |> String.replace("%", ".*?")
 
-    [Macro.to_string({var, [], nil}), "re", inspect(regex)]
+    compact({:re, env1, [var, "^#{regex}$"]})
   end
 
   # Mark this for later
@@ -199,6 +199,15 @@ defmodule EJDB2 do
     do: [compact(a), "#{map_op(op)}", compact(b)]
 
   # Left hand side must be a property or a dotted path!
+  def compact({op, _env, [key, b]}) when is_atom(key) do
+    [
+      "/[",
+      "#{key}",
+      "#{map_op(op)}",
+      compact(b),
+      "]"
+    ]
+  end
   def compact({op, _env, [{{:., _, _} = dottedpath, _, []}, b]}) do
     {path, key} = to_path(dottedpath)
 
@@ -211,11 +220,13 @@ defmodule EJDB2 do
     ]
   end
 
-  def compact({op, _env, [a, _b]}) when op not in @logical_ops,
-    do:
+  def compact({op, _env, [a, _b]}) when op not in @logical_ops
+    do
+      IO.inspect {op, _env, [a, _b]}
       raise(ArgumentError,
-        message: "Left hand side of #{op} must be property; got #{Macro.to_string(IO.inspect(a))}"
+        message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
       )
+    end
 
   # Rest can be used as-is
   def compact(a), do: a
