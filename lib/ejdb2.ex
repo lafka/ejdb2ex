@@ -117,19 +117,23 @@ defmodule EJDB2 do
   def query(pid, {collection, qstr}, opts \\ []) do
     idfield = opts[:id] || "id"
     # prewalk, convert all compile time values to query string
-    outopts = Keyword.put(opts, :multi, true)
+    outopts = Keyword.put_new(opts, :multi, true)
     res = Conn.call(pid, ["query", collection, qstr], outopts)
 
     with {:ok, rows} <- res do
-      rows = for {id, data} <- rows, do: Map.put(data, idfield, id)
-      {:ok, rows}
+      if outopts[:multi] do
+        rows = for {id, data} <- rows, do: Map.put(data, idfield, id)
+        {:ok, rows}
+      else
+        {:ok, elem(rows, 0)}
+      end
     end
   end
 
   @doc """
   Build a query string
   """
-  defmacro from(collection, q \\ true) do
+  defmacro from(collection, q \\ true, opts \\ []) do
     try do
       parts = compact(q)
 
@@ -148,7 +152,20 @@ defmodule EJDB2 do
             qstr -> "#{qstr}"
           end
 
-        {unquote(collection), "@#{unquote(collection)}#{qstr}"}
+        pipe =
+          Enum.map_join(unquote(opts)[:options] || [], " ", fn
+            {k, v} -> "#{k} #{v}"
+            v -> "#{v}"
+          end)
+
+        pipe =
+          if "" == pipe do
+            ""
+          else
+            " | #{pipe}"
+          end
+
+        {unquote(collection), "@#{unquote(collection)}#{qstr} #{pipe}"}
       end
     rescue
       e in ArgumentError ->
@@ -208,6 +225,7 @@ defmodule EJDB2 do
       "]"
     ]
   end
+
   def compact({op, _env, [{{:., _, _} = dottedpath, _, []}, b]}) do
     {path, key} = to_path(dottedpath)
 
@@ -220,13 +238,11 @@ defmodule EJDB2 do
     ]
   end
 
-  def compact({op, _env, [a, _b]}) when op not in @logical_ops
-    do
-      IO.inspect {op, _env, [a, _b]}
-      raise(ArgumentError,
-        message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
-      )
-    end
+  def compact({op, _env, [a, _b]}) when op not in @logical_ops do
+    raise(ArgumentError,
+      message: "Left hand side of #{op} must be property; got #{Macro.to_string(a)}"
+    )
+  end
 
   # Rest can be used as-is
   def compact(a), do: a

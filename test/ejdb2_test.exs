@@ -160,7 +160,6 @@ defmodule EJDB2Test do
     assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, value(like("%sample%"))))
     assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, value(like("%not included%"))))
 
-
     assert {:ok, [c]} == EJDB2.query(pid, EJDB2.from(@coll, re(value, "^sample")))
     assert {:ok, [a, b, c, d]} == EJDB2.query(pid, EJDB2.from(@coll, re(value, ".*sample.*")))
     assert {:ok, []} == EJDB2.query(pid, EJDB2.from(@coll, re(value, "%not included%")))
@@ -201,6 +200,24 @@ defmodule EJDB2Test do
     data = %{a: 3}
     assert {:ok, rows} = EJDB2.query(pid, EJDB2.from(@coll, deep.__.value == ^data.a))
     assert rows == selected
+  end
+
+  test "query: count", %{conn: pid} do
+    q = EJDB2.from(@coll, true, options: [:count])
+    assert {"collection", "@collection/*  | count"} == q
+    assert {:ok, 0} = EJDB2.query(pid, q, multi: false)
+  end
+
+  test "query: limit", %{conn: pid} do
+    q = EJDB2.from(@coll, true, options: [limit: 1])
+    assert {"collection", "@collection/*  | limit 1"} == q
+    assert {:ok, []} = EJDB2.query(pid, q)
+  end
+
+  test "query: skip", %{conn: pid} do
+    q = EJDB2.from(@coll, true, options: [skip: 1])
+    assert {"collection", "@collection/*  | skip 1"} == q
+    assert {:ok, []} = EJDB2.query(pid, q)
   end
 
   test "info", %{conn: pid} do
