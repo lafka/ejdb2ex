@@ -204,6 +204,10 @@ defmodule EJDB2 do
     compact({:re, env1, [var, "^#{regex}$"]})
   end
 
+  def compact({:not, _env, [{:in, env, [a, b]}]}) do
+    compact({:ni, env, [a, b]})
+  end
+
   # Mark this for later
   def compact({:^, env, [e]}), do: {:{}, env, [e]}
   # Normal variables refers to a property in the model
