@@ -97,7 +97,7 @@ defmodule EJDB2.Conn do
           cond do
             data? and nil != str_to_error(hd(msgs)) ->
               error = str_to_error(hd(msgs))
-              Logger.warn("[#{reqid}] << #{error}")
+              Logger.debug("[#{reqid}] << #{error}")
               send(pid, {reqid, :error, error})
               Map.drop(state, [reqid])
 
