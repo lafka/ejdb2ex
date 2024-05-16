@@ -39,20 +39,8 @@ defmodule EJDB2.Conn do
 
     :ok = WebSockex.cast(pid, {:send, {self(), reqid}, cmd, opts})
 
-    :ok =
-      receive do
-        {:DOWN, ^monref, :process, ^pid, _reason} ->
-          Process.exit(self(), :noproc)
-      after
-        0 ->
-          :ok
-      end
-
     reply =
       receive do
-        {:DOWN, ^monref, :process, ^pid, reason} ->
-          Process.exit(self(), reason)
-
         {^reqid, :error, reason} ->
           {:error, reason}
 
@@ -67,9 +55,15 @@ defmodule EJDB2.Conn do
         {^reqid, :reply, [reply]} when not multi? ->
           json = handle_document(reply)
           {:ok, json}
+
+        {:DOWN, ^monref, :process, ^pid, reason} ->
+          Process.exit(self(), reason)
+          {:error, {:EXIT, pid, reason}}
+
       after
         timeout ->
           Process.exit(self(), :timeout)
+          {:error, {:EXIT, pid, :timeout}}
       end
 
     Process.demonitor(monref)
